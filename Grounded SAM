@@ -1,0 +1,116 @@
+!pip install -q timm
+!pip install -q git+https://github.com/ChaoningZhang/MobileSAM.git
+!wget -q https://github.com/ChaoningZhang/MobileSAM/raw/master/weights/mobile_sam.pt
+!pip install -q transformers torch torchvision
+import torch
+import numpy as np
+import matplotlib.pyplot as plt
+from PIL import Image
+import os
+from transformers import AutoProcessor, AutoModelForZeroShotObjectDetection
+from transformers import SamProcessor, SamModel
+
+device = "cuda" if torch.cuda.is_available() else "cpu"
+
+dino_processor = AutoProcessor.from_pretrained("IDEA-Research/grounding-dino-base")
+dino_model = AutoModelForZeroShotObjectDetection.from_pretrained("IDEA-Research/grounding-dino-base").to(device)
+sam_processor = SamProcessor.from_pretrained("facebook/sam-vit-base")
+sam_model = SamModel.from_pretrained("facebook/sam-vit-base").to(device)
+
+my_folder = '/content/drive/MyDrive/huvle/'
+
+img_dict = {
+    '기찻길.jpg': "railroad. guardrail. the green leaves. the mountain. cloudy sky.",
+    '불가사리.jpg': "the orange starfish. sand under the sea.",
+    '다람쥐.jpg': "the squirrel. the tree trunk. snow."
+}
+
+def run_segmentation(img_name, prompt):
+    img_path = my_folder + img_name
+
+    img = Image.open(img_path).convert("RGB")
+    inputs = dino_processor(images=img, text=prompt, return_tensors="pt").to(device)
+
+    with torch.no_grad():
+        out = dino_model(**inputs)
+
+    results = dino_processor.post_process_grounded_object_detection(
+        out,
+        inputs.input_ids,
+        target_sizes=[img.size[::-1]]
+    )[0]
+
+    th = 0.3
+    keep_idx = results["scores"] >= th
+
+    boxes = results["boxes"][keep_idx]
+    scores = results["scores"][keep_idx]
+    labels = [results["labels"][i] for i, k in enumerate(keep_idx) if k]
+
+    if len(boxes) == 0:
+        print("Detection failed.")
+        return
+
+    print(f"Detected {len(boxes)} objects.")
+
+    inputs_sam = sam_processor(
+        images=img,
+        input_boxes=[boxes.tolist()],
+        return_tensors="pt"
+    ).to(device)
+
+    with torch.no_grad():
+        out_sam = sam_model(**inputs_sam)
+
+    masks = sam_processor.post_process_masks(
+        out_sam.pred_masks,
+        inputs_sam["original_sizes"],
+        inputs_sam["reshaped_input_sizes"]
+    )[0]
+
+    color_list = plt.cm.tab10.colors
+    fig = plt.figure(figsize=(12, 5))
+
+    ax1 = fig.add_subplot(1, 2, 1)
+    ax1.imshow(img)
+    ax1.set_title(f"Input Image")
+
+    ax2 = fig.add_subplot(1, 2, 2)
+    ax2.imshow(img)
+    ax2.set_title("SAM Segmentation")
+
+    color_dict = {}
+    c_idx = 0
+
+    for i in range(len(masks)):
+        m = masks[i][0].cpu().numpy()
+        label_name = labels[i]
+
+        if label_name not in color_dict:
+            color_dict[label_name] = color_list[c_idx % 10]
+            c_idx += 1
+
+        c = color_dict[label_name]
+
+        overlay = np.zeros((m.shape[0], m.shape[1], 4))
+        overlay[m] = [c[0], c[1], c[2], 0.7]
+        ax2.imshow(overlay)
+
+    import matplotlib.patches as mpatches
+    legend_patches = [
+    mpatches.Patch(
+        color=v,
+        label=f"{k}: {scores[labels.index(k)].item()*100:.1f}%"
+    )
+    for k, v in color_dict.items()
+]
+
+    ax2.legend(handles=legend_patches, loc='upper right')
+
+    plt.show()
+
+for k, v in img_dict.items():
+    if os.path.exists(my_folder + k):
+        run_segmentation(k, v)
+    else:
+        print(f"File not found: {k}")
