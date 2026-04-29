@@ -1,1 +1,8 @@
+!pip install open_clip_torch==2.20.0
+!pip install 'git+https://github.com/facebookresearch/detectron2.git'
 
+!python demo/demo.py \
+  --config-file configs/coco/panoptic-segmentation/fcclip/fcclip_convnext_large_eval_ade20k_r50.yaml \
+  --input /content/resized/기찻길.jpg /content/resized/다람쥐.jpg /content/resized/불가사리.jpg \
+  --output /content/output/ \
+  --opts MODEL.WEIGHTS /content/fc_clip_r50.pth
