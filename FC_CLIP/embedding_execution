@@ -1,0 +1,7 @@
+%cd /content/drive/MyDrive/FC-CLIP/fc-clip-main
+
+!python demo/extract.py \
+  --config-file configs/coco/panoptic-segmentation/fcclip/fcclip_convnext_large_eval_ade20k_r50.yaml \
+  --input /content/drive/MyDrive/FC-CLIP/기찻길.jpg \
+  --output /content/output/ \
+  --opts MODEL.WEIGHTS /content/drive/MyDrive/FC-CLIP/fcclip_cocopan_r50.pth
