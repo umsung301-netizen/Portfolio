@@ -113,6 +113,8 @@ device = "cuda" if torch.cuda.is_available() else "cpu"
 clip_model, clip_preprocess = clip.load("ViT-B/16", device=device)
 clip_model.eval()
 
+import os
+import pickle
 
 def extract_and_save(img, predictions, output_dir, path):
     panoptic_seg, segments_info = predictions["panoptic_seg"]
@@ -126,6 +128,10 @@ def extract_and_save(img, predictions, output_dir, path):
         mask = panoptic_map == seg_id
 
         rows, cols = np.where(mask)
+        # [안전장치 1] 마스크 영역이 아예 없는 경우 건너뛰기
+        if rows.size == 0 or cols.size == 0:
+            continue
+
         y1, y2 = rows.min(), rows.max()
         x1, x2 = cols.min(), cols.max()
         crop = img_rgb[y1 : y2 + 1, x1 : x2 + 1].copy()
@@ -142,9 +148,28 @@ def extract_and_save(img, predictions, output_dir, path):
 
         embeddings.append(emb.squeeze().cpu().numpy())
 
-    embeddings = np.stack(embeddings)
+    # [안전장치 2] 추출된 객체가 있을 때만 stack 수행
+    if embeddings:
+        embeddings = np.stack(embeddings)
+    else:
+        embeddings = np.array([])  # 검출된 객체가 없으면 빈 배열 처리
 
+    # ---------------------------------------------------------
+    # [추가된 핵심 로직] 추출한 임베딩을 실제 파일로 저장하기
+    # ---------------------------------------------------------
+    os.makedirs(output_dir, exist_ok=True)
+    base_name = os.path.splitext(os.path.basename(path))[0]
+    save_path = os.path.join(output_dir, f"{base_name}_features.pkl")
 
+    # 세그먼트 메타데이터와 임베딩 벡터를 묶어서 저장
+    save_data = {
+        "segments_info": segments_info,
+        "embeddings": embeddings
+    }
+
+    with open(save_path, "wb") as f:
+        pickle.dump(save_data, f)
+        
 if __name__ == "__main__":
     mp.set_start_method("spawn", force=True)
     args = get_parser().parse_args()
