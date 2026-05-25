@@ -206,23 +206,6 @@ def process_image_qwen(image_path: str):
         print(f"파싱 에러: {e}\n원본 텍스트:\n{generated_text}")
         return None
 
-
-# ---------------------------------------------------------
-# 3. 실행 테스트
-# ---------------------------------------------------------
-# if __name__ == "__main__":
-#     # Google AI Studio에서 무료로 발급받은 API 키를 입력하세요.
-#     GEMINI_API_KEY = "AIzaSyADiYo_qEf-wEcQAw2TyWkhYFL0_qyFQ6M"
-#     test_image = "data/original_data/ln_2291852_1775345375020816700.jpg"
-
-#     print("Gemini API로 임시 분석 중...")
-#     # result = process_image_hf(test_image)
-#     result = process_image_gemini(test_image, GEMINI_API_KEY)
-
-#     if result:
-#         print("\n✅ 임시 추출 성공! 결과 데이터:")
-#         print(json.dumps(result, indent=4, ensure_ascii=False))
-
 if __name__ == "__main__":
     import os
     import glob
