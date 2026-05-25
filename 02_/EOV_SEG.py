@@ -22,12 +22,15 @@ import json
 class QwenServer:
     def __init__(self):
         env = os.environ.copy()
-        env["CUDA_VISIBLE_DEVICES"] = "3"
-        print("Qwen3-VL 서버를 독립된 환경에서 시작합니다...")
+        # 외부 터미널 설정을 최우선으로 따르고, 설정이 없으면 기본값 '0'번 GPU 사용
+        env["CUDA_VISIBLE_DEVICES"] = os.environ.get("CUDA_VISIBLE_DEVICES", "0")
+        print(f"Qwen3-VL 서버를 독립된 환경(GPU: {env['CUDA_VISIBLE_DEVICES']})에서 시작합니다...")
+        
+        # 하드코딩된 절대 경로 제거 (sys.executable로 현재 가상환경 파이썬 자동 인식)
         self.process = subprocess.Popen(
             [
-                "/data/nas/backup/segment/qwen_venv/bin/python",
-                "/data/nas/backup/segment/qwen_server.py",
+                sys.executable,
+                "qwen_server.py",  # qwen_server.py가 현재 실행 위치와 같은 폴더에 있다고 가정
             ],
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
