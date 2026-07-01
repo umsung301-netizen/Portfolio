@@ -1,0 +1,62 @@
+# ---------------------------------------------------------
+# (qwen)
+# ---------------------------------------------------------
+from qwen_vl_utils import process_vision_info
+
+MODEL_ID = "Qwen/Qwen2.5-VL-7B-Instruct"
+
+print("모델 로딩 중")
+processor = AutoProcessor.from_pretrained(MODEL_ID)
+model = Qwen2_5_VLForConditionalGeneration.from_pretrained(
+    "Qwen/Qwen2.5-VL-7B-Instruct", torch_dtype="auto", device_map="auto"
+)
+
+def process_image_qwen(image_path: str):
+    image = Image.open(image_path).convert("RGB")
+    schema_json = ImageMetadata.schema_json()
+
+    messages = [
+        {
+            "role": "user",
+            "content": [
+                {"type": "image", "image": image},
+                {"type": "text", "text": f"주어진 이미지를 분석하여 다음 JSON 스키마에 정확히 맞춰서 답변해 줘.\n설명이나 인사말 등 다른 텍스트는 절대 출력하지 말고 오직 JSON 형식만 출력해.\nSchema:\n{schema_json}"}
+            ]
+        }
+    ]
+
+    text = processor.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
+    image_inputs, video_inputs = process_vision_info(messages)
+
+    inputs = processor(
+        text=[text],
+        images=image_inputs,
+        videos=video_inputs,
+        return_tensors="pt"
+    ).to(model.device)
+
+    # 모델 추론 (기존 Llama 코드와 동일)
+    with torch.no_grad():
+        output = model.generate(
+            **inputs,
+            max_new_tokens=512,
+            temperature=0.2,
+            do_sample=True
+        )
+
+    input_length = inputs["input_ids"].shape[1]
+    generated_tokens = output[0][input_length:]
+    generated_text = processor.decode(generated_tokens, skip_special_tokens=True)
+
+    # 후처리 (기존 Llama 코드와 완전히 동일)
+    try:
+        json_match = re.search(r'\{.*\}', generated_text, re.DOTALL)
+        if json_match:
+            clean_json = json_match.group(0)
+            parsed_data = ImageMetadata.parse_raw(clean_json)
+            return parsed_data.dict()
+        else:
+            raise ValueError("JSON 형식을 찾을 수 없습니다.")
+    except Exception as e:
+        print(f"파싱 에러: {e}\n원본 텍스트:\n{generated_text}")
+        return None
